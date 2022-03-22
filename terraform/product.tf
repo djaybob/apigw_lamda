@@ -41,15 +41,28 @@ resource "aws_api_gateway_rest_api" "product_apigw" {
   }
 }
 
-resource "aws_api_gateway_resource" "product" {
+resource "aws_api_gateway_resource" "product_create" {
   rest_api_id = aws_api_gateway_rest_api.product_apigw.id
   parent_id   = aws_api_gateway_rest_api.product_apigw.root_resource_id
-  path_part   = "product"
+  path_part   = "create"
 }
 
-resource "aws_api_gateway_method" "createproduct" {
+resource "aws_api_gateway_resource" "product_get" {
+  rest_api_id = aws_api_gateway_rest_api.product_apigw.id
+  parent_id   = aws_api_gateway_rest_api.product_apigw.root_resource_id
+  path_part   = "get"
+}
+
+resource "aws_api_gateway_method" "product_create" {
   rest_api_id   = aws_api_gateway_rest_api.product_apigw.id
-  resource_id   = aws_api_gateway_resource.product.id
+  resource_id   = aws_api_gateway_resource.product_create.id
+  http_method   = "POST"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_method" "product_get" {
+  rest_api_id   = aws_api_gateway_rest_api.product_apigw.id
+  resource_id   = aws_api_gateway_resource.product_get.id
   http_method   = "POST"
   authorization = "NONE"
 }
@@ -93,9 +106,9 @@ resource "aws_lambda_function" "CreateProductHandler" {
 
   function_name = "CreateProductHandler"
 
-  filename = "../lambda/product_lambda.zip"
+  filename = "../lambda/product.zip"
 
-  handler = "createproduct.lambda_handler"
+  handler = "create.lambda_handler"
   runtime = "python3.8"
 
   environment {
@@ -105,7 +118,7 @@ resource "aws_lambda_function" "CreateProductHandler" {
    }
   }
 
-  source_code_hash = filebase64sha256("../lambda/product_lambda.zip")
+  source_code_hash = filebase64sha256("../lambda/product.zip")
 
   role = aws_iam_role.ProductLambdaRole.arn
 
@@ -114,11 +127,11 @@ resource "aws_lambda_function" "CreateProductHandler" {
 
 }
 
-resource "aws_api_gateway_integration" "createproduct-lambda" {
+resource "aws_api_gateway_integration" "product-lambda-create" {
 
   rest_api_id = aws_api_gateway_rest_api.product_apigw.id
-  resource_id = aws_api_gateway_method.createproduct.resource_id
-  http_method = aws_api_gateway_method.createproduct.http_method
+  resource_id = aws_api_gateway_method.product_create.resource_id
+  http_method = aws_api_gateway_method.product_create.http_method
 
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
@@ -126,21 +139,49 @@ resource "aws_api_gateway_integration" "createproduct-lambda" {
   uri = aws_lambda_function.CreateProductHandler.invoke_arn
 }
 
-resource "aws_lambda_permission" "apigw-CreateProductHandler" {
+resource "aws_api_gateway_integration" "product-lambda-get" {
+
+  rest_api_id = aws_api_gateway_rest_api.product_apigw.id
+  resource_id = aws_api_gateway_method.product_get.resource_id
+  http_method = aws_api_gateway_method.product_get.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+
+  uri = aws_lambda_function.CreateProductHandler.invoke_arn
+}
+
+
+resource "aws_lambda_permission" "apigw-CreateProductHandler-create" {
 
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.CreateProductHandler.function_name
   principal     = "apigateway.amazonaws.com"
 
-  source_arn = "${aws_api_gateway_rest_api.product_apigw.execution_arn}/*/POST/product"
+  source_arn = "${aws_api_gateway_rest_api.product_apigw.execution_arn}/*/POST/create"
 }
 
-resource "aws_api_gateway_deployment" "productapistageprod" {
+resource "aws_lambda_permission" "apigw-CreateProductHandler-get" {
 
-  depends_on = [
-    aws_api_gateway_integration.createproduct-lambda
-  ]
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.CreateProductHandler.function_name
+  principal     = "apigateway.amazonaws.com"
+
+  source_arn = "${aws_api_gateway_rest_api.product_apigw.execution_arn}/*/POST/get"
+}
+
+resource "aws_api_gateway_deployment" "productapistageprod-create" {
+
+  depends_on = [aws_api_gateway_integration.product-lambda-create]
 
   rest_api_id = aws_api_gateway_rest_api.product_apigw.id
   stage_name  = "prod"
 }
+resource "aws_api_gateway_deployment" "productapistageprod-get" {
+
+  depends_on = [aws_api_gateway_integration.product-lambda-get]
+
+  rest_api_id = aws_api_gateway_rest_api.product_apigw.id
+  stage_name  = "prod"
+}
+

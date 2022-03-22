@@ -185,3 +185,4 @@ resource "aws_api_gateway_deployment" "productapistageprod-get" {
   stage_name  = "prod"
 }
 
+
